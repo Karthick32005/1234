@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ESP32 Car Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f4f4f9;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin: 20px;
+    }
+    #joystick {
+      width: 200px;
+      height: 200px;
+      margin: 20px auto;
+      border: 2px solid #333;
+      border-radius: 50%;
+      position: relative;
+      background: #fff;
+      touch-action: none;
+    }
+    #stick {
+      width: 60px;
+      height: 60px;
+      background: #007bff;
+      border-radius: 50%;
+      position: absolute;
+      top: 70px;
+      left: 70px;
+      touch-action: none;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+      margin-top: 20px;
+    }
+    .switch input { display:none; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0;
+      right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 34px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px; width: 26px;
+      left: 4px; bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #2196F3;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+  </style>
+</head>
+<body>
+  <h1>ESP32 Control Panel</h1>
+
+  <!-- Joystick -->
+  <div id="joystick">
+    <div id="stick"></div>
+  </div>
+  <p id="joystickData">X: 0 | Y: 0</p>
+
+  <!-- Bluetooth/WiFi Switch -->
+  <label class="switch">
+    <input type="checkbox" id="modeSwitch">
+    <span class="slider"></span>
+  </label>
+  <p id="modeLabel">Mode: WiFi</p>
+
+  <script>
+    // --------- Joystick ----------
+    const joystick = document.getElementById("joystick");
+    const stick = document.getElementById("stick");
+    const dataDisplay = document.getElementById("joystickData");
+
+    let dragging = false;
+    let centerX = joystick.offsetWidth / 2;
+    let centerY = joystick.offsetHeight / 2;
+    let maxRadius = joystick.offsetWidth / 2 - stick.offsetWidth / 2;
+
+    function sendData(x, y) {
+      // send joystick data to ESP32
+      let mode = document.getElementById("modeSwitch").checked ? "BT" : "WiFi";
+      console.log(`Mode: ${mode}, X: ${x}, Y: ${y}`);
+
+      if(mode === "WiFi"){
+        fetch(`/control?x=${x}&y=${y}`).catch(err=>console.log("WiFi send error"));
+      } else {
+        // For Bluetooth: here you can integrate Web Bluetooth API
+        // Example: sendBluetoothData(x,y);
+      }
+    }
+
+    stick.addEventListener("mousedown", () => dragging = true);
+    document.addEventListener("mouseup", () => {
+      dragging = false;
+      stick.style.left = centerX - stick.offsetWidth/2 + "px";
+      stick.style.top = centerY - stick.offsetHeight/2 + "px";
+      sendData(0, 0);
+      dataDisplay.innerText = "X: 0 | Y: 0";
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      let rect = joystick.getBoundingClientRect();
+      let x = e.clientX - rect.left - centerX;
+      let y = e.clientY - rect.top - centerY;
+      let distance = Math.sqrt(x*x + y*y);
+
+      if(distance > maxRadius){
+        let angle = Math.atan2(y, x);
+        x = maxRadius * Math.cos(angle);
+        y = maxRadius * Math.sin(angle);
+      }
+      stick.style.left = centerX + x - stick.offsetWidth/2 + "px";
+      stick.style.top = centerY + y - stick.offsetHeight/2 + "px";
+
+      let normX = Math.round(x / maxRadius * 100);
+      let normY = Math.round(y / maxRadius * 100);
+      dataDisplay.innerText = `X: ${normX} | Y: ${normY}`;
+      sendData(normX, normY);
+    });
+
+    // -------- Mode Switch --------
+    const modeSwitch = document.getElementById("modeSwitch");
+    const modeLabel = document.getElementById("modeLabel");
+
+    modeSwitch.addEventListener("change", () => {
+      modeLabel.innerText = modeSwitch.checked ? "Mode: Bluetooth" : "Mode: WiFi";
+    });
+  </script>
+</body>
+</html>
